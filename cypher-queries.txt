@@ -1,0 +1,66 @@
+// Get all activities with their applications, intentions and entities
+MATCH (a:Activity)
+OPTIONAL MATCH (a)-[:USED]->(app:Application)
+OPTIONAL MATCH (a)-[:HAS_INTENT]->(i:Intention)
+OPTIONAL MATCH (a)-[:INVOLVES]->(e:Entity)
+RETURN a.id, a.summary, a.timestamp, 
+       collect(DISTINCT app.name) as applications,
+       collect(DISTINCT i.name) as intentions,
+       collect(DISTINCT e.name) as entities
+ORDER BY a.timestamp DESC
+LIMIT 10;
+
+// Find activities with a specific intention
+MATCH (a:Activity)-[:HAS_INTENT]->(i:Intention {name: "research"})
+RETURN a.summary, a.timestamp
+ORDER BY a.timestamp DESC;
+
+// Find the most common applications used across activities
+MATCH (a:Activity)-[:USED]->(app:Application)
+RETURN app.name, count(a) as activity_count
+ORDER BY activity_count DESC;
+
+// Find the most common intentions
+MATCH (a:Activity)-[:HAS_INTENT]->(i:Intention)
+RETURN i.name, count(a) as activity_count
+ORDER BY activity_count DESC;
+
+// Find connected activities (activity paths/workflows)
+MATCH path = (a:Activity)-[:FOLLOWED_BY*1..5]->(b:Activity)
+RETURN [node in nodes(path) | node.summary] as activity_sequence;
+
+// Find activities involving specific entities
+MATCH (a:Activity)-[:INVOLVES]->(e:Entity)
+WHERE e.name IN ["email", "document", "meeting"]
+RETURN a.summary, a.timestamp, collect(e.name) as entities
+ORDER BY a.timestamp DESC;
+
+// Find related intentions (intentions that occur together)
+MATCH (a:Activity)-[:HAS_INTENT]->(i1:Intention)
+MATCH (a)-[:HAS_INTENT]->(i2:Intention)
+WHERE i1.name < i2.name // Avoid duplicates
+RETURN i1.name, i2.name, count(a) as co_occurrence
+ORDER BY co_occurrence DESC;
+
+// Find activity sequences with specific application transitions
+// (e.g., user switched from email to browser)
+MATCH (a1:Activity)-[:USED]->(app1:Application {name: "Outlook"})
+MATCH (a2:Activity)-[:USED]->(app2:Application {name: "Chrome"})
+MATCH (a1)-[:FOLLOWED_BY*1..3]->(a2)
+RETURN a1.summary as from_activity, 
+       a2.summary as to_activity,
+       a1.timestamp as from_time,
+       a2.timestamp as to_time;
+
+// Identify potential tasks based on activity clusters
+MATCH (a:Activity)
+MATCH (a)-[:HAS_INTENT]->(i:Intention)
+WITH a, collect(i.name) as intentions
+RETURN a.summary, intentions, a.timestamp
+ORDER BY a.timestamp;
+
+// Temporal analysis: Activities by time period
+MATCH (a:Activity)
+WITH date(a.timestamp) as day, count(a) as daily_count
+RETURN day, daily_count
+ORDER BY day;
